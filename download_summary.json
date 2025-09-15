@@ -1,0 +1,23 @@
+{
+  "download_status": {
+    "mildsum_samples": true,
+    "inlegalbert": true,
+    "nltk_data": true
+  },
+  "file_structure": {
+    "InLegalBERT": [
+      "model_info.json",
+      "model.safetensors",
+      "tokenizer.json",
+      "config.json",
+      "special_tokens_map.json",
+      "tokenizer_config.json",
+      "vocab.txt"
+    ]
+  },
+  "next_steps": [
+    "1. Run data preprocessing: python src/data_preprocessing.py",
+    "2. Setup model: python src/model_setup.py",
+    "3. Begin training: python src/training.py"
+  ]
+}

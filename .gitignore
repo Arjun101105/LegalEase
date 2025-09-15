@@ -1,0 +1,88 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv/
+.env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Model Files (Large - to be downloaded)
+data/models/InLegalBERT/
+data/models/InLegalBERT_optimized/
+data/models/t5_legal_simplification_trained/
+data/models/t5_simplification/
+data/models/*.safetensors
+data/models/*.bin
+data/models/*.pt
+data/models/*.pth
+
+# Raw Data (Large - to be downloaded)
+data/raw/MILDSum_Samples/
+
+# Temporary files
+*.log
+*.tmp
+.cache/
+temp/
+tmp/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Keep important config files
+!data/models/*/config.json
+!data/models/*/tokenizer*.json
+!data/models/*/vocab.txt
+!data/models/*/special_tokens_map.json
+!data/models/*/*.model
+!data/models/*/training_info.json
+!data/models/*/optimization_info.json
+!data/models/*/simplification_config.json
+
+# Keep processed data (small)
+!data/processed/
+!data/models/system_info.json
+!data/models/training_curves.png
+
+# Test files
+test_*.txt
+simplified_results.json
+debug_*.py

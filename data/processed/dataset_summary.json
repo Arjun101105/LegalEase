@@ -1,0 +1,31 @@
+{
+  "total_pairs": 30,
+  "avg_legal_text_length": 187.2,
+  "avg_simplified_text_length": 195.03333333333333,
+  "pair_types": {
+    "judgment_summary": 30
+  },
+  "sample_pairs": [
+    {
+      "legal_text": "The Gauhati High Court recently denied anticipatory bail to a person in connection with a case registered under Section 21(c) 29 of NDPS Act, 1985 holding that recovery or seizure of the contraband is not mandatory for their arrest, detention or even their conviction.",
+      "simplified_text": "the gauhati high court recently denied anticipatory bail to a person in connection with a case registered under section 21(c) 29 of ndps act, 1985 holding that recovery or seizure of the contraband is not mandatory for their arrest, detention or even their conviction.",
+      "source_judgment": "EN_Summary.txt",
+      "source_summary": "EN_Summary.txt",
+      "pair_type": "judgment_summary"
+    },
+    {
+      "legal_text": "Justice Sanjay Kumar Medhi observed that this was so because the offences under the Act were part of an organised crime and any convincing and corroborating material in favour of the prosecution would be sufficient to establish their guilt.",
+      "simplified_text": "justice sanjay kumar medhi observed that this was so because the offences under the act were part of an organised crime and any convincing and corroborating material in favour of the prosecution would be sufficient to establish their guilt.",
+      "source_judgment": "EN_Summary.txt",
+      "source_summary": "EN_Summary.txt",
+      "pair_type": "judgment_summary"
+    },
+    {
+      "legal_text": "This Court finds force in the submission of the learned APP, Assam that offences under the NDPS Act are part of an organized crime wherein different roles are played by different accused persons.",
+      "simplified_text": "this court finds force in the submission of the learned app, assam that offences under the ndps act are part of an organized crime wherein different roles are played by different accused persons.",
+      "source_judgment": "EN_Summary.txt",
+      "source_summary": "EN_Summary.txt",
+      "pair_type": "judgment_summary"
+    }
+  ]
+}
