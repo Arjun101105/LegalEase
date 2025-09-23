@@ -27,6 +27,7 @@ env/
 ENV/
 .venv/
 .env/
+legalease_env/
 
 # IDE
 .vscode/
@@ -48,6 +49,8 @@ Thumbs.db
 data/models/InLegalBERT/
 data/models/InLegalBERT_optimized/
 data/models/t5_legal_simplification_trained/
+data/models/flan_t5/
+data/models/flan_t5_enhanced/
 data/models/t5_simplification/
 data/models/*.safetensors
 data/models/*.bin

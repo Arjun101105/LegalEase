@@ -19,7 +19,7 @@ sys.path.append(str(Path(__file__).parent))
 import torch
 from transformers import (
     AutoTokenizer, AutoModel,
-    AutoModelForSeq2SeqLM,
+    T5ForConditionalGeneration, T5Tokenizer,
 )
 
 warnings.filterwarnings("ignore")
@@ -107,24 +107,12 @@ class LegalTextSimplifier:
             self.inlegal_tokenizer = AutoTokenizer.from_pretrained("law-ai/InLegalBERT")
             self.inlegal_model = AutoModel.from_pretrained("law-ai/InLegalBERT")
         
-        # Load FLAN-T5 model for simplification
-        print("🔄 Loading FLAN-T5 Simplification Model...")
-        # Check for enhanced model first
-        enhanced_path = self.models_dir / "flan_t5_enhanced"
-        flan_t5_path = self.models_dir / "flan_t5"
-        
-        if enhanced_path.exists():
-            print("🚀 Using enhanced FLAN-T5 model")
-            self.t5_tokenizer = AutoTokenizer.from_pretrained(str(enhanced_path))
-            self.t5_model = AutoModelForSeq2SeqLM.from_pretrained(str(enhanced_path))
-        elif flan_t5_path.exists():
-            print("✅ Using local FLAN-T5 model")
-            self.t5_tokenizer = AutoTokenizer.from_pretrained(str(flan_t5_path))
-            self.t5_model = AutoModelForSeq2SeqLM.from_pretrained(str(flan_t5_path))
-        else:
-            print("⚠️  Local FLAN-T5 not found, downloading...")
-            self.t5_tokenizer = AutoTokenizer.from_pretrained("google/flan-t5-small")
-            self.t5_model = AutoModelForSeq2SeqLM.from_pretrained("google/flan-t5-small")
+        # Load T5 model for simplification
+        print("🔄 Loading T5 Simplification Model...")
+        # Use base T5 model for better English generation
+        print("⚠️  Using base T5 model for reliable English output")
+        self.t5_tokenizer = T5Tokenizer.from_pretrained("t5-small", legacy=False)
+        self.t5_model = T5ForConditionalGeneration.from_pretrained("t5-small")
         
         # Set models to evaluation mode
         if self.inlegal_model:
@@ -143,60 +131,51 @@ class LegalTextSimplifier:
             return "❌ Error: Models not loaded. Please run load_models() first."
         
         try:
-            # Use FLAN-T5 with proper instruction prompting
-            print("🤖 Using FLAN-T5 for high-quality simplification...")
+            # For now, use manual rule-based simplification for reliable results
+            # The T5 model is generating non-English output due to multilingual training
+            print("🔧 Using rule-based simplification for reliable results...")
+            simplified_text = self.manual_simplification(legal_text)
             
-            # FLAN-T5 works best with clear, specific instructions
-            instruction = f"Rewrite this legal text in simple English that ordinary people can understand: {legal_text.strip()}"
-            input_text = instruction
+            # If we want to try T5 as well, uncomment below:
+            # But keeping it simple for now
+            """
+            # Prepare input text with better prompt for base T5
+            input_text = f"paraphrase: {legal_text.strip()}"
             
             # Tokenize input
             max_len = max_length or self.config.get("max_length", 512)
-            inputs = self.t5_tokenizer(
+            inputs = self.t5_tokenizer.encode(
                 input_text,
                 return_tensors="pt",
                 max_length=max_len,
-                truncation=True,
-                padding=True
+                truncation=True
             )
             
-            # Generate simplified text with enhanced parameters
+            # Generate simplified text
             with torch.no_grad():
                 outputs = self.t5_model.generate(
-                    inputs.input_ids,
-                    attention_mask=inputs.attention_mask,
+                    inputs,
                     max_new_tokens=150,
-                    min_length=15,
-                    num_beams=3,
+                    min_length=10,
+                    num_beams=2,
                     temperature=0.7,
                     do_sample=True,
-                    top_p=0.85,
-                    repetition_penalty=1.1,
                     early_stopping=True,
                     pad_token_id=self.t5_tokenizer.pad_token_id,
                     eos_token_id=self.t5_tokenizer.eos_token_id
                 )
             
             # Decode output
-            flan_output = self.t5_tokenizer.decode(outputs[0], skip_special_tokens=True)
+            t5_output = self.t5_tokenizer.decode(outputs[0], skip_special_tokens=True)
             
-            # Debug: Print raw output
-            print(f"🔍 Raw FLAN-T5 output: {flan_output}")
+            # Clean up T5 output
+            if t5_output.startswith("paraphrase:"):
+                t5_output = t5_output.replace("paraphrase:", "").strip()
             
-            # Clean up FLAN-T5 output
-            if "Rewrite this legal text" in flan_output:
-                # Extract only the simplified part
-                parts = flan_output.split(":", 1)
-                if len(parts) > 1:
-                    flan_output = parts[1].strip()
-            
-            # Post-process for better readability
-            simplified_text = self.post_process_output(flan_output)
-            
-            # Fallback to manual simplification if FLAN-T5 output is poor
-            if len(simplified_text.strip()) < 10 or simplified_text.lower() == legal_text.lower():
-                print("🔧 FLAN-T5 output not satisfactory, using enhanced manual simplification...")
-                simplified_text = self.enhanced_manual_simplification(legal_text)
+            # Use T5 output if it's in English, otherwise use manual
+            if self.is_english(t5_output):
+                simplified_text = t5_output
+            """
             
             return simplified_text
             
@@ -232,86 +211,6 @@ class LegalTextSimplifier:
         except Exception as e:
             return f"❌ Error analyzing text: {str(e)}"
     
-    
-    def post_process_output(self, text):
-        """Post-process FLAN-T5 output for better readability"""
-        if not text or len(text.strip()) < 10:
-            return "Unable to simplify this text."
-        
-        # Clean up common issues
-        text = text.strip()
-        
-        # Ensure proper capitalization
-        if text and not text[0].isupper():
-            text = text[0].upper() + text[1:]
-        
-        # Ensure proper ending punctuation
-        if text and text[-1] not in '.!?':
-            text += '.'
-        
-        # Remove redundant phrases
-        redundant_phrases = [
-            "In simple terms:",
-            "Simply put:",
-            "To put it simply:",
-            "In other words:",
-        ]
-        
-        for phrase in redundant_phrases:
-            if text.startswith(phrase):
-                text = text[len(phrase):].strip()
-                if text and not text[0].isupper():
-                    text = text[0].upper() + text[1:]
-        
-        return text
-
-    def enhanced_manual_simplification(self, legal_text):
-        """Enhanced manual simplification with better patterns"""
-        
-        # Start with basic manual simplification
-        simplified = self.manual_simplification(legal_text)
-        
-        # Additional enhancements for common legal patterns
-        patterns = {
-            r"The plaintiff filed a writ petition under Article (\d+).*?seeking mandamus": 
-                lambda m: f"The person filing the case asked the court (under Article {m.group(1)} of the Constitution) to order someone to do their legal duty",
-            
-            r"seeking mandamus for the enforcement of statutory obligations":
-                "asking the court to order proper enforcement of legal duties",
-                
-            r"non-compliance with statutory provisions":
-                "not following the legal requirements",
-                
-            r"statutory obligations":
-                "legal duties required by law",
-                
-            r"hereby.*?covenant.*?and agree":
-                "promise",
-                
-            r"party of the first part":
-                "first person",
-                
-            r"party of the second part": 
-                "second person",
-        }
-        
-        import re
-        result = simplified
-        for pattern, replacement in patterns.items():
-            if callable(replacement):
-                result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
-            else:
-                result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
-        
-        # Clean up and format
-        result = result.strip()
-        if result and not result[0].isupper():
-            result = result[0].upper() + result[1:]
-        if result and result[-1] not in '.!?':
-            result += '.'
-            
-        return result
-
     def manual_simplification(self, legal_text):
         """
         Manual rule-based simplification as fallback
