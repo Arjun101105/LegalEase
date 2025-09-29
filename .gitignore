@@ -1,4 +1,9 @@
+# LegalEase - Git Ignore File
+# Generated for clean GitHub repository
+
+# =============================================================================
 # Python
+# =============================================================================
 __pycache__/
 *.py[cod]
 *$py.class
@@ -16,76 +21,168 @@ parts/
 sdist/
 var/
 wheels/
+pip-wheel-metadata/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 MANIFEST
 
-# Virtual Environment
-venv/
-env/
-ENV/
-.venv/
-.env/
-legalease_env/
+# PyInstaller
+*.manifest
+*.spec
 
-# IDE
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
+#   However, in case of collaboration, if having platform-specific dependencies or dependencies
+#   having no cross-platform support, pipenv may install dependencies that don't work, or not
+#   install all needed dependencies.
+#Pipfile.lock
+
+# PEP 582; used by e.g. github.com/David-OConnor/pyflow
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# =============================================================================
+# AI Models and Data (Large Files)
+# =============================================================================
+# Pre-trained models (too large for GitHub)
+data/models/*/
+!data/models/.gitkeep
+!data/models/README.md
+
+# Local LLM models
+data/models/local_llms/*/
+data/models/InLegalBERT/model.safetensors
+data/models/InLegalBERT/pytorch_model.bin
+data/models/InLegalBERT_optimized/pytorch_model_quantized.bin
+data/models/flan_t5*/
+data/models/t5_simplification/
+
+# Large datasets
+data/raw/MILDSum_Samples/
+data/processed/large_dataset.csv
+data/processed/*_large.json
+
+# =============================================================================
+# Document Files (Samples and Test Data)
+# =============================================================================
+# Sample PDFs and documents (can be large)
+*.pdf
+*.PDF
+*.docx
+*.doc
+
+# OCR results and processed documents
+*_demo_results/
+*_processing_results/
+enhanced_processing_results/
+doc2_demo_results/
+ocr_results/
+output_*/
+
+# =============================================================================
+# System and IDE Files
+# =============================================================================
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# Linux
+*~
+
+# IDE Files
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# OS
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# Model Files (Large - to be downloaded)
-data/models/InLegalBERT/
-data/models/InLegalBERT_optimized/
-data/models/t5_legal_simplification_trained/
-data/models/flan_t5/
-data/models/flan_t5_enhanced/
-data/models/t5_simplification/
-data/models/*.safetensors
-data/models/*.bin
-data/models/*.pt
-data/models/*.pth
-
-# Raw Data (Large - to be downloaded)
-data/raw/MILDSum_Samples/
-
-# Temporary files
+# =============================================================================
+# Project Specific
+# =============================================================================
+# Logs and temporary files
+logs/
 *.log
-*.tmp
-.cache/
 temp/
 tmp/
 
-# Jupyter Notebook
-.ipynb_checkpoints/
+# Configuration files with sensitive data
+config_local.py
+secrets.json
+api_keys.txt
 
-# Keep important config files
-!data/models/*/config.json
-!data/models/*/tokenizer*.json
-!data/models/*/vocab.txt
-!data/models/*/special_tokens_map.json
-!data/models/*/*.model
-!data/models/*/training_info.json
-!data/models/*/optimization_info.json
-!data/models/*/simplification_config.json
+# Download summaries and metadata
+download_summary.json
+system_info.json
 
-# Keep processed data (small)
-!data/processed/
-!data/models/system_info.json
-!data/models/training_curves.png
+# Demo and test files
+demo_*.py
+test_*.py
+check_*.py
 
-# Test files
-test_*.txt
-simplified_results.json
-debug_*.py
+# Development documentation (keep main docs)
+CLEANUP_SUMMARY.md
+ENHANCEMENT_COMPLETE.md
+PUSH_READY.md
+Project\ Explanation.md
+
+# =============================================================================
+# Git LFS (Large File Storage) - if using
+# =============================================================================
+# Use Git LFS for large model files if needed
+# *.bin filter=lfs diff=lfs merge=lfs -text
+# *.safetensors filter=lfs diff=lfs merge=lfs -text
