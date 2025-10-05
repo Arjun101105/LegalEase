@@ -9,3 +9,11 @@ scikit-learn>=1.7.0
 tqdm>=4.67.0
 requests>=2.32.0
 matplotlib>=3.10.0
+
+# OCR Dependencies
+pytesseract>=0.3.13
+easyocr>=1.7.2
+Pillow>=11.0.0
+pdf2image>=1.17.0
+opencv-python>=4.12.0
+scikit-image>=0.25.2

@@ -1,0 +1,21 @@
+{
+  "model_type": "text2text-generation",
+  "base_model": "InLegalBERT",
+  "task": "legal_text_simplification",
+  "max_input_length": 512,
+  "max_output_length": 256,
+  "training_params": {
+    "learning_rate": 5e-05,
+    "batch_size": 4,
+    "num_epochs": 3,
+    "warmup_steps": 100,
+    "weight_decay": 0.01,
+    "gradient_accumulation_steps": 4
+  },
+  "hardware_config": {
+    "device": "cpu",
+    "cpu_threads": 4,
+    "max_memory_gb": 4,
+    "use_quantization": true
+  }
+}

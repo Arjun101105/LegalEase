@@ -57,6 +57,7 @@ def create_directories():
         Path(directory).mkdir(parents=True, exist_ok=True)
     
     print("✅ Directories created")
+    return True  # Added explicit success return
 
 def setup_virtual_environment():
     """Set up virtual environment"""
@@ -158,32 +159,42 @@ def create_run_scripts():
         activate_cmd = "source venv/bin/activate"
         python_cmd = "venv/bin/python"
     
-    # Create run script
+    # Create run script (Unix)
     run_script_content = f"""#!/bin/bash
 # LegalEase Quick Run Script
-echo "🏛️  Starting LegalEase..."
+echo \"🏛️  Starting LegalEase...\"
 {activate_cmd}
-{python_cmd} src/cli_app.py "$@"
+{python_cmd} src/cli_app.py \"$@\"
 """
     
-    with open("run_legalease.sh", "w") as f:
-        f.write(run_script_content)
+    try:
+        with open("run_legalease.sh", "w", encoding="utf-8") as f:
+            f.write(run_script_content)
+        if platform.system() != "Windows":
+            os.chmod("run_legalease.sh", 0o755)
+    except Exception as e:
+        print(f"⚠️  Could not write run_legalease.sh with UTF-8: {e}")
     
-    # Make executable on Unix systems
-    if platform.system() != "Windows":
-        os.chmod("run_legalease.sh", 0o755)
-    
-    # Create batch file for Windows
+    # Create batch file for Windows with UTF-8 code page switch
     if platform.system() == "Windows":
         batch_content = f"""@echo off
+chcp 65001 >nul
 echo 🏛️  Starting LegalEase...
 {activate_cmd}
 {python_cmd} src/cli_app.py %*
 """
-        with open("run_legalease.bat", "w") as f:
-            f.write(batch_content)
+        try:
+            with open("run_legalease.bat", "w", encoding="utf-8") as f:
+                f.write(batch_content)
+        except Exception as e:
+            # Fallback without emojis if encoding still fails
+            fallback = f"@echo off\nchcp 65001 >nul\necho Starting LegalEase...\n{activate_cmd}\n{python_cmd} src/cli_app.py %*\n"
+            with open("run_legalease.bat", "w", encoding="utf-8", errors="ignore") as f:
+                f.write(fallback)
+            print(f"⚠️  Wrote fallback batch file without emojis due to: {e}")
     
     print("✅ Run scripts created")
+    return True  # Explicit success
 
 def test_installation():
     """Test the installation"""

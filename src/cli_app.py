@@ -16,11 +16,21 @@ import argparse
 # Add src to path for imports
 sys.path.append(str(Path(__file__).parent))
 
+# Import OCR processor
+try:
+    from ocr_processor import LegalOCRProcessor
+    OCR_AVAILABLE = True
+except ImportError:
+    OCR_AVAILABLE = False
+
 import torch
 from transformers import (
     AutoTokenizer, AutoModel,
     AutoModelForSeq2SeqLM,
 )
+
+from llm_integration import LLMSimplifier
+from local_llm_integration import LocalLegalSimplifier
 
 warnings.filterwarnings("ignore")
 
@@ -44,6 +54,14 @@ class LegalTextSimplifier:
         # Load configuration
         self.config = self.load_config()
         
+        # Initialize LLM enhancer
+        self.llm_simplifier = LLMSimplifier()
+        self.use_llm_enhancement = True  # Enable by default
+        
+        # Initialize local LLM enhancer (100% free & offline)
+        self.local_llm_simplifier = LocalLegalSimplifier()
+        self.use_local_llm = True  # Enable by default
+    
     def load_config(self):
         """Load simplification configuration"""
         config_path = self.models_dir / "simplification_config.json"
@@ -92,7 +110,7 @@ class LegalTextSimplifier:
         # Load InLegalBERT for text understanding
         print("📚 Loading InLegalBERT...")
         inlegal_path = self.models_dir / "InLegalBERT"
-        if inlegal_path.exists():
+        if (inlegal_path.exists()):
             try:
                 self.inlegal_tokenizer = AutoTokenizer.from_pretrained(str(inlegal_path))
                 self.inlegal_model = AutoModel.from_pretrained(str(inlegal_path))
@@ -143,35 +161,42 @@ class LegalTextSimplifier:
             return "❌ Error: Models not loaded. Please run load_models() first."
         
         try:
-            # Use FLAN-T5 with proper instruction prompting
-            print("🤖 Using FLAN-T5 for high-quality simplification...")
+            # First try enhanced manual simplification for better results
+            print("🔧 Using enhanced rule-based simplification for reliable results...")
+            manual_result = self.enhanced_manual_simplification(legal_text)
             
-            # FLAN-T5 works best with clear, specific instructions
-            instruction = f"Rewrite this legal text in simple English that ordinary people can understand: {legal_text.strip()}"
-            input_text = instruction
+            # If manual result is good, return it
+            if len(manual_result.strip()) > 20 and manual_result.lower() != legal_text.lower():
+                return manual_result
+            
+            # Otherwise try FLAN-T5 with better prompting
+            print("🤖 Trying FLAN-T5 for additional improvements...")
+            
+            # Create a more specific instruction for FLAN-T5
+            instruction = f"Explain this legal text in simple words that anyone can understand: {legal_text.strip()}"
             
             # Tokenize input
             max_len = max_length or self.config.get("max_length", 512)
             inputs = self.t5_tokenizer(
-                input_text,
+                instruction,
                 return_tensors="pt",
                 max_length=max_len,
                 truncation=True,
                 padding=True
             )
             
-            # Generate simplified text with enhanced parameters
+            # Generate simplified text with better parameters
             with torch.no_grad():
                 outputs = self.t5_model.generate(
                     inputs.input_ids,
                     attention_mask=inputs.attention_mask,
-                    max_new_tokens=150,
-                    min_length=15,
-                    num_beams=3,
-                    temperature=0.7,
+                    max_new_tokens=200,
+                    min_length=20,
+                    num_beams=4,
+                    temperature=0.8,
                     do_sample=True,
-                    top_p=0.85,
-                    repetition_penalty=1.1,
+                    top_p=0.9,
+                    repetition_penalty=1.2,
                     early_stopping=True,
                     pad_token_id=self.t5_tokenizer.pad_token_id,
                     eos_token_id=self.t5_tokenizer.eos_token_id
@@ -184,27 +209,110 @@ class LegalTextSimplifier:
             print(f"🔍 Raw FLAN-T5 output: {flan_output}")
             
             # Clean up FLAN-T5 output
-            if "Rewrite this legal text" in flan_output:
-                # Extract only the simplified part
-                parts = flan_output.split(":", 1)
-                if len(parts) > 1:
-                    flan_output = parts[1].strip()
+            cleaned_output = self.post_process_flan_output(flan_output, legal_text)
             
-            # Post-process for better readability
-            simplified_text = self.post_process_output(flan_output)
-            
-            # Fallback to manual simplification if FLAN-T5 output is poor
-            if len(simplified_text.strip()) < 10 or simplified_text.lower() == legal_text.lower():
-                print("🔧 FLAN-T5 output not satisfactory, using enhanced manual simplification...")
-                simplified_text = self.enhanced_manual_simplification(legal_text)
-            
-            return simplified_text
+            # Use FLAN-T5 output if it's better than manual, otherwise use manual
+            if (len(cleaned_output.strip()) > 20 and 
+                cleaned_output.lower() != legal_text.lower() and 
+                "explain this legal text" not in cleaned_output.lower()):
+                return cleaned_output
+            else:
+                print("🔧 Using manual simplification as FLAN-T5 output wasn't satisfactory...")
+                return manual_result
             
         except Exception as e:
             logger.error(f"Error in text simplification: {str(e)}")
-            import traceback
-            logger.error(f"Traceback: {traceback.format_exc()}")
-            return f"❌ Error simplifying text: {str(e)}"
+            # Fallback to manual simplification
+            print("🔧 Falling back to manual simplification due to error...")
+            return self.enhanced_manual_simplification(legal_text)
+
+    def simplify_text_enhanced(self, text: str) -> dict:
+        """Enhanced simplification with LLM integration"""
+        print("🔄 Processing legal text...")
+        
+        # Get current system output
+        current_result = self.simplify_text(text)
+        current_simplified = current_result.get('simplified_text', text)
+        
+        if self.use_llm_enhancement:
+            # Try LLM enhancement
+            enhanced_simplified = self.llm_simplifier.enhance_simplification(
+                text, current_simplified
+            )
+            
+            # Create enhanced result
+            enhanced_result = current_result.copy()
+            enhanced_result['simplified_text'] = enhanced_simplified
+            enhanced_result['enhancement_used'] = True
+            
+            return enhanced_result
+        else:
+            current_result['enhancement_used'] = False
+            return current_result
+    
+    def simplify_text_with_local_llm(self, text: str) -> str:
+        """Enhanced simplification with local LLM integration"""
+        print("🔄 Processing legal text with local LLM enhancement...")
+        
+        # Get current system output
+        current_simplified = self.simplify_text(text)
+        
+        if self.use_local_llm:
+            # Try local LLM enhancement (100% free & offline)
+            enhanced_simplified = self.local_llm_simplifier.enhance_simplification(
+                text, current_simplified
+            )
+            return enhanced_simplified
+        else:
+            return current_simplified
+    
+    def toggle_llm_enhancement(self):
+        """Toggle LLM enhancement on/off"""
+        self.use_llm_enhancement = not self.use_llm_enhancement
+        status = "enabled" if self.use_llm_enhancement else "disabled"
+        print(f"🤖 LLM enhancement {status}")
+    
+    def toggle_local_llm(self):
+        """Toggle local LLM enhancement on/off"""
+        self.use_local_llm = not self.use_local_llm
+        status = "enabled" if self.use_local_llm else "disabled"
+        print(f"🤖 Local LLM enhancement {status}")
+    
+    def setup_local_llms(self):
+        """Setup local LLM models"""
+        print("🚀 Setting up local LLM models...")
+        self.local_llm_simplifier.setup_models()
+    
+    def post_process_flan_output(self, flan_output, original_text):
+        """Clean and improve FLAN-T5 output"""
+        text = flan_output.strip()
+        
+        # Remove instruction echoing
+        prefixes_to_remove = [
+            "Explain this legal text in simple words that anyone can understand:",
+            "Rewrite this legal text in simple English that ordinary people can understand:",
+            "In simple terms:",
+            "Simply put:",
+            "This means:",
+        ]
+        
+        for prefix in prefixes_to_remove:
+            if text.lower().startswith(prefix.lower()):
+                text = text[len(prefix):].strip()
+        
+        # If output is too similar to input, return empty to trigger fallback
+        if text.lower() == original_text.lower():
+            return ""
+        
+        # Ensure proper capitalization
+        if text and not text[0].isupper():
+            text = text[0].upper() + text[1:]
+        
+        # Ensure proper ending punctuation
+        if text and text[-1] not in '.!?':
+            text += '.'
+        
+        return text
     
     def analyze_legal_text(self, legal_text):
         """
@@ -412,6 +520,8 @@ def interactive_mode(simplifier):
     """Run interactive simplification mode"""
     print("🎯 Interactive Mode - Enter legal text to simplify")
     print("💡 Type 'examples' to see sample texts")
+    if OCR_AVAILABLE:
+        print("🔍 Type 'ocr' to see OCR capabilities")
     print("❌ Type 'quit' or 'exit' to stop")
     print("=" * 50)
     print()
@@ -429,6 +539,9 @@ def interactive_mode(simplifier):
             elif legal_text.lower() == 'examples':
                 print_examples()
                 continue
+            elif legal_text.lower() == 'ocr':
+                print_ocr_info()
+                continue
             elif not legal_text:
                 print("⚠️  Please enter some legal text to simplify.")
                 continue
@@ -437,7 +550,7 @@ def interactive_mode(simplifier):
             print("\n🔄 Simplifying text...")
             start_time = time.time()
             
-            simplified = simplifier.simplify_text(legal_text)
+            simplified = simplifier.simplify_text_enhanced(legal_text)
             
             processing_time = time.time() - start_time
             
@@ -482,7 +595,7 @@ def batch_mode(simplifier, input_file, output_file=None):
         results = []
         for i, text in enumerate(texts, 1):
             print(f"🔄 Processing text {i}/{len(texts)}...")
-            simplified = simplifier.simplify_text(text)
+            simplified = simplifier.simplify_text_enhanced(text)
             results.append({
                 'original': text,
                 'simplified': simplified
@@ -504,18 +617,227 @@ def batch_mode(simplifier, input_file, output_file=None):
     except Exception as e:
         print(f"❌ Error processing batch: {str(e)}")
 
+def ocr_mode(simplifier, document_path, output_dir=None, simplify=True):
+    """Process documents using OCR and optionally simplify extracted text"""
+    if not OCR_AVAILABLE:
+        print("❌ OCR functionality not available. Please install OCR dependencies:")
+        print("   pip install pytesseract easyocr Pillow pdf2image opencv-python")
+        return
+    
+    try:
+        # Initialize OCR processor
+        print("🔍 Initializing OCR processor...")
+        ocr = LegalOCRProcessor()
+        
+        # Process document
+        print(f"📄 Processing document: {document_path}")
+        result = ocr.process_document(document_path)
+        
+        if "error" in result:
+            print(f"❌ OCR Error: {result['error']}")
+            return
+        
+        # Extract text
+        extracted_text = result.get("best_text", result.get("combined_text", ""))
+        confidence = result.get("best_confidence", result.get("total_confidence", 0))
+        
+        if not extracted_text:
+            print("❌ No text could be extracted from the document")
+            return
+        
+        print(f"✅ Text extracted successfully (Confidence: {confidence:.1f}%)")
+        print(f"📊 Extracted {len(extracted_text)} characters")
+        
+        # Save extracted text
+        if output_dir:
+            output_path = Path(output_dir)
+            output_path.mkdir(parents=True, exist_ok=True)
+            
+            # Save original extracted text
+            doc_name = Path(document_path).stem
+            text_file = output_path / f"{doc_name}_extracted.txt"
+            with open(text_file, 'w', encoding='utf-8') as f:
+                f.write(extracted_text)
+            print(f"💾 Extracted text saved to: {text_file}")
+        
+        # Display extracted text (truncated)
+        print("\n" + "=" * 60)
+        print("📜 EXTRACTED TEXT:")
+        print("-" * 60)
+        display_text = extracted_text[:500] + "..." if len(extracted_text) > 500 else extracted_text
+        print(display_text)
+        print("=" * 60)
+        
+        # Simplify if requested
+        if simplify and extracted_text.strip():
+            print("\n🔄 Simplifying extracted text...")
+            
+            # Split long text into chunks for better processing
+            chunks = []
+            sentences = extracted_text.split('.')
+            current_chunk = ""
+            
+            for sentence in sentences:
+                if len(current_chunk + sentence) < 400:  # Keep chunks under 400 chars
+                    current_chunk += sentence + "."
+                else:
+                    if current_chunk:
+                        chunks.append(current_chunk.strip())
+                    current_chunk = sentence + "."
+            
+            if current_chunk:
+                chunks.append(current_chunk.strip())
+            
+            simplified_chunks = []
+            for i, chunk in enumerate(chunks, 1):
+                if chunk.strip():
+                    print(f"  Processing chunk {i}/{len(chunks)}...")
+                    simplified = simplifier.simplify_text_enhanced(chunk)
+                    simplified_chunks.append(simplified)
+            
+            final_simplified = " ".join(simplified_chunks)
+            
+            # Display simplified text
+            print("\n" + "=" * 60)
+            print("✨ SIMPLIFIED VERSION:")
+            print("-" * 60)
+            print(final_simplified)
+            print("=" * 60)
+            
+            # Save simplified text
+            if output_dir:
+                simplified_file = output_path / f"{doc_name}_simplified.txt"
+                with open(simplified_file, 'w', encoding='utf-8') as f:
+                    f.write(final_simplified)
+                print(f"💾 Simplified text saved to: {simplified_file}")
+        
+        # Cleanup
+        ocr.cleanup()
+        
+    except Exception as e:
+        print(f"❌ Error processing document: {str(e)}")
+
+def ocr_batch_mode(simplifier, input_dir, output_dir, simplify=True):
+    """Process multiple documents using OCR"""
+    if not OCR_AVAILABLE:
+        print("❌ OCR functionality not available. Please install OCR dependencies:")
+        print("   pip install pytesseract easyocr Pillow pdf2image opencv-python")
+        return
+    
+    try:
+        # Initialize OCR processor
+        print("🔍 Initializing OCR processor for batch processing...")
+        ocr = LegalOCRProcessor()
+        
+        # Process batch
+        print(f"📁 Processing documents in: {input_dir}")
+        results = ocr.process_batch(input_dir, output_dir)
+        
+        if "error" in results:
+            print(f"❌ Batch processing error: {results['error']}")
+            return
+        
+        # Display summary
+        summary = results["summary"]
+        print(f"\n📊 Batch Processing Summary:")
+        print(f"   Total files: {results['total_files']}")
+        print(f"   Successful: {summary['successful']}")
+        print(f"   Failed: {summary['failed']}")
+        if summary['successful'] > 0:
+            print(f"   Average confidence: {summary.get('average_confidence', 0):.1f}%")
+        
+        # Simplify extracted texts if requested
+        if simplify and summary['successful'] > 0:
+            print(f"\n🔄 Simplifying {summary['successful']} extracted texts...")
+            
+            output_path = Path(output_dir)
+            for file_result in results["processed_files"]:
+                if "error" not in file_result:
+                    doc_name = Path(file_result["source_file"]).stem
+                    
+                    # Read extracted text
+                    text_file = output_path / f"{doc_name}_extracted.txt"
+                    if text_file.exists():
+                        with open(text_file, 'r', encoding='utf-8') as f:
+                            extracted_text = f.read()
+                        
+                        if extracted_text.strip():
+                            print(f"  Simplifying: {doc_name}")
+                            simplified = simplifier.simplify_text_enhanced(extracted_text[:1000])  # Limit length
+                            
+                            # Save simplified text
+                            simplified_file = output_path / f"{doc_name}_simplified.txt"
+                            with open(simplified_file, 'w', encoding='utf-8') as f:
+                                f.write(simplified)
+        
+        print(f"✅ Batch processing complete. Results saved to: {output_dir}")
+        
+        # Cleanup
+        ocr.cleanup()
+        
+    except Exception as e:
+        print(f"❌ Error in batch OCR processing: {str(e)}")
+
+def print_ocr_info():
+    """Print OCR capabilities and usage information"""
+    print("🔍 OCR (Optical Character Recognition) Features:")
+    print("-" * 50)
+    
+    if OCR_AVAILABLE:
+        print("✅ OCR functionality is available")
+        print("\n📄 Supported Document Types:")
+        print("   • PDF documents (.pdf)")
+        print("   • Images (.jpg, .jpeg, .png, .bmp, .tiff)")
+        print("\n🎯 OCR Features:")
+        print("   • Multiple OCR engines (Tesseract + EasyOCR)")
+        print("   • Automatic image preprocessing")
+        print("   • Confidence scoring")
+        print("   • Batch document processing")
+        print("   • Legal document optimization")
+        print("\n📖 Usage Examples:")
+        print("   # Extract and simplify from PDF")
+        print("   python src/cli_app.py --ocr document.pdf")
+        print("")
+        print("   # Extract only (no simplification)")
+        print("   python src/cli_app.py --ocr document.pdf --no-simplify")
+        print("")
+        print("   # Batch process documents")
+        print("   python src/cli_app.py --ocr-batch input_folder/ --output output_folder/")
+        print("")
+        print("   # Process image with output directory")
+        print("   python src/cli_app.py --ocr contract.jpg --output results/")
+    else:
+        print("❌ OCR functionality not available")
+        print("\n📦 To enable OCR, install dependencies:")
+        print("   pip install pytesseract easyocr Pillow pdf2image opencv-python")
+        print("\n⚠️  Note: Tesseract OCR also needs to be installed separately:")
+        print("   Windows: Download from https://github.com/UB-Mannheim/tesseract/wiki")
+        print("   Linux: sudo apt-get install tesseract-ocr")
+        print("   macOS: brew install tesseract")
+
 def main():
     """Main application entry point"""
-    parser = argparse.ArgumentParser(description="LegalEase - Legal Text Simplification CLI")
+    parser = argparse.ArgumentParser(description="LegalEase - Legal Text Simplification CLI with OCR Support")
     parser.add_argument('--input', '-i', help='Input file for batch processing')
-    parser.add_argument('--output', '-o', help='Output file for batch processing')
+    parser.add_argument('--output', '-o', help='Output file/directory for results')
     parser.add_argument('--text', '-t', help='Direct text input for simplification')
     parser.add_argument('--examples', action='store_true', help='Show example legal texts')
+    
+    # OCR arguments
+    parser.add_argument('--ocr', help='Process document using OCR (PDF/image file)')
+    parser.add_argument('--ocr-batch', help='Process multiple documents using OCR (input directory)')
+    parser.add_argument('--no-simplify', action='store_true', help='Extract text only, do not simplify')
+    parser.add_argument('--ocr-info', action='store_true', help='Show OCR capabilities and usage')
     
     args = parser.parse_args()
     
     # Print banner
     print_banner()
+    
+    # Handle OCR info
+    if args.ocr_info:
+        print_ocr_info()
+        return
     
     # Handle examples
     if args.examples:
@@ -525,7 +847,40 @@ def main():
     # Initialize simplifier
     simplifier = LegalTextSimplifier()
     
-    # Load models
+    # Handle OCR processing (single document)
+    if args.ocr:
+        # Load models only if simplification is requested
+        if not args.no_simplify:
+            try:
+                simplifier.load_models()
+            except Exception as e:
+                print(f"❌ Error loading models: {str(e)}")
+                print("⚠️  Continuing with OCR only (no simplification)")
+                args.no_simplify = True
+        
+        ocr_mode(simplifier, args.ocr, args.output, not args.no_simplify)
+        return
+    
+    # Handle OCR batch processing
+    if args.ocr_batch:
+        if not args.output:
+            print("❌ Output directory required for batch OCR processing")
+            print("Usage: --ocr-batch input_dir --output output_dir")
+            return
+        
+        # Load models only if simplification is requested
+        if not args.no_simplify:
+            try:
+                simplifier.load_models()
+            except Exception as e:
+                print(f"❌ Error loading models: {str(e)}")
+                print("⚠️  Continuing with OCR only (no simplification)")
+                args.no_simplify = True
+        
+        ocr_batch_mode(simplifier, args.ocr_batch, args.output, not args.no_simplify)
+        return
+    
+    # Load models for text processing
     try:
         simplifier.load_models()
     except Exception as e:
@@ -540,7 +895,7 @@ def main():
     # Handle direct text input
     if args.text:
         print(f"🔄 Simplifying provided text...")
-        simplified = simplifier.simplify_text(args.text)
+        simplified = simplifier.simplify_text_enhanced(args.text)
         print(f"\n📜 Original: {args.text}")
         print(f"✨ Simplified: {simplified}")
         return
