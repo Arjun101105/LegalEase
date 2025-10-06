@@ -125,13 +125,18 @@ class LegalTextSimplifier:
             self.inlegal_tokenizer = AutoTokenizer.from_pretrained("law-ai/InLegalBERT")
             self.inlegal_model = AutoModel.from_pretrained("law-ai/InLegalBERT")
         
-        # Load FLAN-T5 model for simplification
-        print("🔄 Loading FLAN-T5 Simplification Model...")
-        # Check for enhanced model first
+        # Load T5 model for simplification - try our trained model first
+        print("🔄 Loading T5 Simplification Model...")
+        # Priority: trained model > enhanced > flan-t5 > fallback
+        trained_path = self.models_dir / "t5_legal_simplification_trained"
         enhanced_path = self.models_dir / "flan_t5_enhanced"
         flan_t5_path = self.models_dir / "flan_t5"
         
-        if enhanced_path.exists():
+        if trained_path.exists():
+            print("🎯 Using trained legal T5 model (MILDSum fine-tuned)")
+            self.t5_tokenizer = AutoTokenizer.from_pretrained(str(trained_path))
+            self.t5_model = AutoModelForSeq2SeqLM.from_pretrained(str(trained_path))
+        elif enhanced_path.exists():
             print("🚀 Using enhanced FLAN-T5 model")
             self.t5_tokenizer = AutoTokenizer.from_pretrained(str(enhanced_path))
             self.t5_model = AutoModelForSeq2SeqLM.from_pretrained(str(enhanced_path))
@@ -140,7 +145,7 @@ class LegalTextSimplifier:
             self.t5_tokenizer = AutoTokenizer.from_pretrained(str(flan_t5_path))
             self.t5_model = AutoModelForSeq2SeqLM.from_pretrained(str(flan_t5_path))
         else:
-            print("⚠️  Local FLAN-T5 not found, downloading...")
+            print("⚠️  No local T5 models found, downloading FLAN-T5...")
             self.t5_tokenizer = AutoTokenizer.from_pretrained("google/flan-t5-small")
             self.t5_model = AutoModelForSeq2SeqLM.from_pretrained("google/flan-t5-small")
         
@@ -232,7 +237,10 @@ class LegalTextSimplifier:
         
         # Get current system output
         current_result = self.simplify_text(text)
-        current_simplified = current_result.get('simplified_text', text)
+        if isinstance(current_result, str):
+            current_simplified = current_result
+        else:
+            current_simplified = current_result.get('simplified_text', text)
         
         if self.use_llm_enhancement:
             # Try LLM enhancement
@@ -241,14 +249,20 @@ class LegalTextSimplifier:
             )
             
             # Create enhanced result
-            enhanced_result = current_result.copy()
-            enhanced_result['simplified_text'] = enhanced_simplified
-            enhanced_result['enhancement_used'] = True
+            enhanced_result = {
+                'original_text': text,
+                'simplified_text': enhanced_simplified,
+                'enhancement_used': True
+            }
             
             return enhanced_result
         else:
-            current_result['enhancement_used'] = False
-            return current_result
+            result = {
+                'original_text': text,
+                'simplified_text': current_simplified,
+                'enhancement_used': False
+            }
+            return result
     
     def simplify_text_with_local_llm(self, text: str) -> str:
         """Enhanced simplification with local LLM integration"""
@@ -897,7 +911,12 @@ def main():
         print(f"🔄 Simplifying provided text...")
         simplified = simplifier.simplify_text_enhanced(args.text)
         print(f"\n📜 Original: {args.text}")
-        print(f"✨ Simplified: {simplified}")
+        if isinstance(simplified, dict):
+            print(f"✨ Simplified: {simplified['simplified_text']}")
+            if simplified.get('enhancement_used'):
+                print("🚀 Enhanced with LLM integration")
+        else:
+            print(f"✨ Simplified: {simplified}")
         return
     
     # Handle batch processing

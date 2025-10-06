@@ -29,7 +29,7 @@ class LLMSimplifier:
                 "model": "claude-3-haiku-20240307"
             },
             "local": {
-                "model": "ollama/llama2:7b",
+                "model": "ollama/llama3.1:8b",
                 "base_url": "http://localhost:11434"
             },
             "groq": {
@@ -152,19 +152,21 @@ SIMPLIFIED VERSION:"""
         """Simplify using local Ollama model"""
         try:
             data = {
-                "model": "llama2:7b",
+                "model": "llama3.1:8b",
                 "prompt": self.create_legal_prompt(legal_text),
                 "stream": False,
                 "options": {
-                    "temperature": 0.3,
-                    "max_tokens": 1000
+                    "temperature": 0.2,  # Lower temperature for more focused responses
+                    "max_tokens": 800,   # Reduced tokens for faster processing
+                    "top_p": 0.9,        # More focused sampling
+                    "repeat_penalty": 1.1
                 }
             }
             
             response = requests.post(
                 f"{self.config['local']['base_url']}/api/generate",
                 json=data,
-                timeout=60
+                timeout=120  # Increased timeout for complex legal texts
             )
             
             if response.status_code == 200:

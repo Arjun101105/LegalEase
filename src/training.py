@@ -36,11 +36,11 @@ PROCESSED_DATA_DIR = DATA_DIR / "processed"
 class LegalSimplificationDataset(Dataset):
     """Dataset class for legal text simplification"""
     
-    def __init__(self, legal_texts, simplified_texts, tokenizer, max_length=512):
+    def __init__(self, legal_texts, simplified_texts, tokenizer, max_length=1024):
         self.legal_texts = legal_texts
         self.simplified_texts = simplified_texts
         self.tokenizer = tokenizer
-        self.max_length = max_length
+        self.max_length = max_length  # Increased for longer legal texts
     
     def __len__(self):
         return len(self.legal_texts)
@@ -49,7 +49,7 @@ class LegalSimplificationDataset(Dataset):
         legal_text = str(self.legal_texts[idx])
         simplified_text = str(self.simplified_texts[idx])
         
-        # Tokenize legal text (input)
+        # Tokenize legal text (input) - truncate if too long
         legal_encoding = self.tokenizer(
             legal_text,
             truncation=True,
@@ -58,12 +58,12 @@ class LegalSimplificationDataset(Dataset):
             return_tensors='pt'
         )
         
-        # Tokenize simplified text (target)
+        # Tokenize simplified text (target) - allow longer summaries
         simplified_encoding = self.tokenizer(
             simplified_text,
             truncation=True,
             padding='max_length',
-            max_length=self.max_length//2,  # Shorter target length
+            max_length=self.max_length//2,  # Target can be up to half input length
             return_tensors='pt'
         )
         
@@ -94,20 +94,20 @@ class T5SimplificationTrainer:
             with open(config_path, 'r') as f:
                 return json.load(f)
         else:
-            # Default configuration
+            # Default configuration optimized for MILDSum training
             return {
                 "training_params": {
-                    "learning_rate": 3e-4,
-                    "batch_size": 2,
-                    "num_epochs": 3,
-                    "warmup_steps": 50,
+                    "learning_rate": 2e-4,  # Slightly lower for stability
+                    "batch_size": 1,        # Smaller batch for longer texts
+                    "num_epochs": 5,        # More epochs for real data
+                    "warmup_steps": 100,    # More warmup steps
                     "weight_decay": 0.01,
-                    "gradient_accumulation_steps": 8
+                    "gradient_accumulation_steps": 16  # Larger accumulation
                 },
                 "hardware_config": {
                     "device": "cpu",
                     "cpu_threads": 4,
-                    "max_memory_gb": 4
+                    "max_memory_gb": 8      # More memory for longer texts
                 }
             }
     
@@ -146,15 +146,30 @@ class T5SimplificationTrainer:
         try:
             logger.info("📖 Loading dataset...")
             
-            # Load processed dataset
+            # Try to load MILDSum dataset first (larger, real legal data)
+            mildsum_path = PROCESSED_DATA_DIR / "mildsum_evaluation_dataset.csv"
             dataset_path = PROCESSED_DATA_DIR / "legal_simplification_dataset.csv"
-            if not dataset_path.exists():
-                logger.error(f"Dataset not found at {dataset_path}")
-                logger.error("Please run data preprocessing first: python src/data_preprocessing.py")
+            
+            if mildsum_path.exists():
+                logger.info("🎯 Using MILDSum real legal dataset for training")
+                df = pd.read_csv(mildsum_path)
+                dataset_type = "MILDSum"
+            elif dataset_path.exists():
+                logger.info("⚠️  Using manual examples dataset (limited)")
+                df = pd.read_csv(dataset_path)
+                dataset_type = "Manual"
+            else:
+                logger.error(f"No dataset found at {mildsum_path} or {dataset_path}")
+                logger.error("Please run: python scripts/process_mildsum_dataset.py")
                 return False
             
-            df = pd.read_csv(dataset_path)
-            logger.info(f"Loaded dataset with {len(df)} samples")
+            logger.info(f"Loaded {dataset_type} dataset with {len(df)} samples")
+            
+            # Show dataset characteristics
+            avg_legal_len = df['legal_text'].str.split().str.len().mean()
+            avg_simple_len = df['simplified_text'].str.split().str.len().mean()
+            logger.info(f"Average legal text length: {avg_legal_len:.0f} words")
+            logger.info(f"Average simplified text length: {avg_simple_len:.0f} words")
             
             # Prepare texts for T5 (add task prefix)
             legal_texts = ["simplify legal text: " + text for text in df['legal_text'].tolist()]

@@ -167,18 +167,50 @@ api_keys.txt
 
 # Download summaries and metadata
 download_summary.json
-system_info.json
+# =============================================================================
+# LegalEase Specific - Models and Large Files
+# =============================================================================
+# Pre-trained models (can be downloaded)
+data/models/InLegalBERT/
+data/models/local_llms/
+data/models/t5_legal_simplification_trained/
+data/models/t5_simplification/
+data/models/*/model.safetensors
+data/models/*/pytorch_model.bin
+data/models/*/tf_model.h5
 
-# Demo and test files
-demo_*.py
+# Training outputs and logs
+training_logs/
+model_checkpoints/
+*.png
+*.jpg
+*.jpeg
+*.svg
+
+# Downloaded datasets (can be re-downloaded)
+data/processed/*.csv
+data/processed/*.json
+download_summary.json
+
+# Temporary and debug files
+debug_test.html
+simple_backend.py
+*_backup.py
 test_*.py
 check_*.py
+demo_*.py
+
+# System and runtime files
+system_info.json
 
 # Development documentation (keep main docs)
 CLEANUP_SUMMARY.md
 ENHANCEMENT_COMPLETE.md
 PUSH_READY.md
 Project\ Explanation.md
+IMPROVEMENTS_SUMMARY.md
+DEPLOYMENT_READY.md
+CROSS_PLATFORM_GUIDE.md
 
 # =============================================================================
 # Git LFS (Large File Storage) - if using

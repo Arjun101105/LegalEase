@@ -618,7 +618,7 @@ Task: Rewrite this legal text in plain, everyday language.
 
 Legal Text: {legal_text}
 
-Simple Explanation:""
+Simple Explanation:"""
             
             data = {
                 "model": model_name,
@@ -763,4 +763,5 @@ def demo_local_llm():
 if __name__ == "__main__":
     # Run setup if called directly
     simplifier = LocalLegalSimplifier()
+    simplifier.setup_models()
     simplifier.setup_models()
